@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 
 import GaugeCard from '../components/GaugeCard';
+import SensorChartCard from '../components/SensorChartCard';
+import { sensorHistory } from '../data/mockSensorHistory';
 
 type DashboardScreenProps = {
   username: string;
@@ -78,13 +80,6 @@ export default function DashboardScreen({
     if (activeDashboard === 'temperature') {
       return (
         <>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Dashboard Suhu</Text>
-            <Text style={styles.infoText}>
-              Menampilkan pemantauan suhu lingkungan dari sensor IoT.
-            </Text>
-          </View>
-
           <GaugeCard
             title="Suhu"
             value={sensorData.temperature}
@@ -92,6 +87,20 @@ export default function DashboardScreen({
             min={0}
             max={50}
             status="Normal"
+          />
+
+          <SensorChartCard
+            title="Grafik Suhu"
+            description=""
+            labels={sensorHistory.labels}
+            datasets={[
+              {
+                data: sensorHistory.temperature,
+                color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
+                strokeWidth: 3,
+              },
+            ]}
+            suffix="°C"
           />
 
           <View style={styles.bottomCard}>
@@ -107,13 +116,6 @@ export default function DashboardScreen({
     if (activeDashboard === 'soil') {
       return (
         <>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Dashboard Kelembapan Tanah</Text>
-            <Text style={styles.infoText}>
-              Menampilkan kondisi kelembapan tanah berdasarkan sensor moisture.
-            </Text>
-          </View>
-
           <GaugeCard
             title="Kelembapan Tanah"
             value={sensorData.soilMoisture}
@@ -121,6 +123,20 @@ export default function DashboardScreen({
             min={0}
             max={100}
             status="Tanah cukup lembap"
+          />
+
+          <SensorChartCard
+            title="Grafik Kelembapan Tanah"
+            description=""
+            labels={sensorHistory.labels}
+            datasets={[
+              {
+                data: sensorHistory.soilMoisture,
+                color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
+                strokeWidth: 3,
+              },
+            ]}
+            suffix="%"
           />
 
           <View style={styles.bottomCard}>
@@ -136,13 +152,6 @@ export default function DashboardScreen({
     if (activeDashboard === 'tds') {
       return (
         <>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Dashboard TDS</Text>
-            <Text style={styles.infoText}>
-              Menampilkan kadar larutan atau nutrisi air berdasarkan sensor TDS.
-            </Text>
-          </View>
-
           <GaugeCard
             title="Kadar Air / TDS"
             value={sensorData.tds}
@@ -150,6 +159,20 @@ export default function DashboardScreen({
             min={0}
             max={1500}
             status="Kadar larutan stabil"
+          />
+
+          <SensorChartCard
+            title="Grafik TDS"
+            description=""
+            labels={sensorHistory.labels}
+            datasets={[
+              {
+                data: sensorHistory.tds,
+                color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
+                strokeWidth: 3,
+              },
+            ]}
+            suffix="ppm"
           />
 
           <View style={styles.bottomCard}>
@@ -167,7 +190,7 @@ export default function DashboardScreen({
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>Dashboard Sensor</Text>
           <Text style={styles.infoText}>
-            Monitoring suhu, kelembapan tanah, dan kadar larutan menggunakan sensor TDS.
+            Monitoring suhu, kelembapan tanah, dan kadar larutan.
           </Text>
         </View>
 
@@ -197,6 +220,42 @@ export default function DashboardScreen({
           max={1500}
           status="Kadar larutan stabil"
         />
+
+  <SensorChartCard
+  title="Grafik Sensor"
+  description=""
+  labels={sensorHistory.labels}
+  datasets={[
+    {
+      data: sensorHistory.temperature,
+      color: (opacity = 1) => `rgba(22, 163, 74, ${opacity})`,
+      strokeWidth: 3,
+    },
+    {
+      data: sensorHistory.soilMoisture,
+      color: (opacity = 1) => `rgba(14, 165, 233, ${opacity})`,
+      strokeWidth: 3,
+    },
+  ]}
+/>
+
+<View style={styles.legendCard}>
+  <Text style={styles.legendTitle}>Keterangan Grafik</Text>
+
+  <View style={styles.legendRow}>
+    <View style={[styles.legendDot, styles.temperatureDot]} />
+    <Text style={styles.legendText}>
+      Suhu °C
+    </Text>
+  </View>
+
+  <View style={styles.legendRow}>
+    <View style={[styles.legendDot, styles.soilDot]} />
+    <Text style={styles.legendText}>
+      Kelembapan %
+    </Text>
+  </View>
+</View>
 
         <View style={styles.bottomCard}>
           <Text style={styles.bottomTitle}>Status Sistem</Text>
@@ -416,6 +475,65 @@ const styles = StyleSheet.create({
     color: '#047857',
     lineHeight: 20,
   },
+
+legendCard: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 22,
+  padding: 18,
+  marginBottom: 18,
+},
+
+legendTitle: {
+  fontSize: 17,
+  fontWeight: '900',
+  color: '#064E3B',
+  marginBottom: 14,
+},
+
+legendRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 12,
+},
+
+legendDot: {
+  width: 14,
+  height: 14,
+  borderRadius: 7,
+  marginRight: 10,
+},
+
+temperatureDot: {
+  backgroundColor: '#16A34A',
+},
+
+soilDot: {
+  backgroundColor: '#0EA5E9',
+},
+
+tdsDot: {
+  backgroundColor: '#EAB308',
+},
+
+legendText: {
+  flex: 1,
+  fontSize: 13,
+  color: '#047857',
+  lineHeight: 20,
+},
+
+legendNoteBox: {
+  backgroundColor: '#ECFDF5',
+  borderRadius: 14,
+  padding: 12,
+  marginTop: 4,
+},
+
+legendNoteText: {
+  fontSize: 12,
+  color: '#065F46',
+  lineHeight: 18,
+},
 
   bottomCard: {
     backgroundColor: '#FFFFFF',
