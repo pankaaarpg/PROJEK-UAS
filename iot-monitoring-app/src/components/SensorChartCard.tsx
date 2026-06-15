@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 
 type Dataset = {
@@ -10,25 +10,47 @@ type Dataset = {
 
 type SensorChartCardProps = {
   title: string;
-  description: string;
   labels: string[];
   datasets: Dataset[];
   suffix?: string;
+  onDownloadCsv?: () => void;
+  downloadRangeLabel?: string;
+  onOpenDownloadRange?: () => void;
 };
 
 const screenWidth = Dimensions.get('window').width;
 
 export default function SensorChartCard({
   title,
-  description,
   labels,
   datasets,
   suffix = '',
+  onDownloadCsv,
+  downloadRangeLabel = '1 Jam',
+  onOpenDownloadRange,
 }: SensorChartCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.description}>{description}</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>{title}</Text>
+
+        <View style={styles.actionRow}>
+          {onOpenDownloadRange && (
+            <Pressable
+              style={styles.rangeButton}
+              onPress={onOpenDownloadRange}
+            >
+              <Text style={styles.rangeText}>{downloadRangeLabel} ▼</Text>
+            </Pressable>
+          )}
+
+          {onDownloadCsv && (
+            <Pressable style={styles.downloadButton} onPress={onDownloadCsv}>
+              <Text style={styles.downloadText}>CSV</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
 
       <LineChart
         data={{
@@ -77,18 +99,53 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+
   title: {
+    flex: 1,
     fontSize: 18,
     fontWeight: '900',
     color: '#064E3B',
-    marginBottom: 6,
+    marginRight: 10,
   },
 
-  description: {
-    fontSize: 13,
-    color: '#047857',
-    lineHeight: 19,
-    marginBottom: 12,
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  rangeButton: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+
+  rangeText: {
+    color: '#064E3B',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+
+  downloadButton: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+
+  downloadText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
   },
 
   chart: {

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Modal,
   Pressable,
@@ -10,9 +11,19 @@ import {
   View,
 } from 'react-native';
 
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
+
 import GaugeCard from '../components/GaugeCard';
 import SensorChartCard from '../components/SensorChartCard';
-import { sensorHistory } from '../data/mockSensorHistory';
+
+import { sensorLogs } from '../data/mockSensorLogs';
+import {
+  filterSensorLogs,
+  SensorFilterType,
+} from '../utils/filterSensorLogs';
+import { exportSensorLogsToCsv } from '../services/export/csvExportService';
 
 type DashboardScreenProps = {
   username: string;
@@ -31,13 +42,42 @@ export default function DashboardScreen({
   const [activeDashboard, setActiveDashboard] =
     useState<DashboardType>('main');
 
+  const [downloadFilter, setDownloadFilter] =
+    useState<SensorFilterType>('1h');
+
+  const [downloadCustomDate, setDownloadCustomDate] =
+    useState<Date | undefined>();
+
+  const [showDownloadRangeModal, setShowDownloadRangeModal] =
+    useState<boolean>(false);
+
+  const [showDownloadDatePicker, setShowDownloadDatePicker] =
+    useState<boolean>(false);
+
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
-  const sensorData = {
-    temperature: 28,
-    soilMoisture: 64,
-    tds: 720,
+  const defaultSensorLog = {
+    timestamp: new Date().toISOString(),
+    temperature: 0,
+    soilMoisture: 0,
+    tds: 0,
   };
+
+  const realTimeLogs = sensorLogs.length > 0 ? sensorLogs : [defaultSensorLog];
+
+  const latestSensorData = realTimeLogs[realTimeLogs.length - 1];
+
+  const chartLabels = realTimeLogs.map((item) => {
+    const date = new Date(item.timestamp);
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+
+    return `${hour}:${minute}`;
+  });
+
+  const temperatureData = realTimeLogs.map((item) => item.temperature);
+  const soilMoistureData = realTimeLogs.map((item) => item.soilMoisture);
+  const tdsData = realTimeLogs.map((item) => item.tds);
 
   const handleOpenMenu = () => {
     setIsMenuOpen(true);
@@ -73,16 +113,104 @@ export default function DashboardScreen({
     if (activeDashboard === 'temperature') return 'Dashboard Suhu';
     if (activeDashboard === 'soil') return 'Dashboard Kelembapan Tanah';
     if (activeDashboard === 'tds') return 'Dashboard TDS';
+
     return 'IoT Monitoring';
+  };
+
+  const getDownloadRangeLabel = () => {
+    if (downloadFilter === '1h') return '1 Jam';
+    if (downloadFilter === '1d') return '1 Hari';
+    if (downloadFilter === '1w') return '1 Minggu';
+    if (downloadFilter === '1m') return '1 Bulan';
+
+    if (downloadFilter === 'custom' && downloadCustomDate) {
+      return downloadCustomDate.toLocaleDateString('id-ID');
+    }
+
+    return 'Custom';
+  };
+
+  const getDownloadLogs = () => {
+    return filterSensorLogs(realTimeLogs, downloadFilter, downloadCustomDate);
+  };
+
+  const handleSelectDownloadRange = (filter: SensorFilterType) => {
+    setShowDownloadRangeModal(false);
+
+    if (filter === 'custom') {
+      setShowDownloadDatePicker(true);
+      return;
+    }
+
+    setDownloadFilter(filter);
+    setDownloadCustomDate(undefined);
+  };
+
+  const handleChangeDownloadDate = (
+    _event: DateTimePickerEvent,
+    date?: Date
+  ) => {
+    setShowDownloadDatePicker(false);
+
+    if (date) {
+      setDownloadCustomDate(date);
+      setDownloadFilter('custom');
+    }
+  };
+
+  const handleDownloadCsv = async () => {
+    try {
+      const downloadLogs = getDownloadLogs();
+
+      if (downloadLogs.length === 0) {
+        Alert.alert(
+          'Data Kosong',
+          'Tidak ada data sensor pada rentang waktu yang dipilih.'
+        );
+        return;
+      }
+
+      await exportSensorLogsToCsv(downloadLogs);
+    } catch (error) {
+      Alert.alert(
+        'Download Gagal',
+        'Data log gagal diunduh. Silakan coba lagi.'
+      );
+    }
+  };
+
+  const openDownloadRangeModal = () => {
+    setShowDownloadRangeModal(true);
+  };
+
+  const renderRealtimeInfo = () => {
+    return (
+      <View style={styles.realTimeCard}>
+        <View style={styles.realTimeDot} />
+        <Text style={styles.realTimeText}>
+          Mode real-time aktif. Grafik menampilkan data sensor terbaru secara
+          otomatis.
+        </Text>
+      </View>
+    );
   };
 
   const renderDashboardContent = () => {
     if (activeDashboard === 'temperature') {
       return (
         <>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Dashboard Suhu</Text>
+            <Text style={styles.infoText}>
+              Menampilkan pemantauan suhu lingkungan dari sensor IoT.
+            </Text>
+          </View>
+
+          {renderRealtimeInfo()}
+
           <GaugeCard
             title="Suhu"
-            value={sensorData.temperature}
+            value={latestSensorData.temperature}
             unit="°C"
             min={0}
             max={50}
@@ -91,16 +219,18 @@ export default function DashboardScreen({
 
           <SensorChartCard
             title="Grafik Suhu"
-            description=""
-            labels={sensorHistory.labels}
+            labels={chartLabels}
             datasets={[
               {
-                data: sensorHistory.temperature,
+                data: temperatureData,
                 color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
                 strokeWidth: 3,
               },
             ]}
             suffix="°C"
+            downloadRangeLabel={getDownloadRangeLabel()}
+            onOpenDownloadRange={openDownloadRangeModal}
+            onDownloadCsv={handleDownloadCsv}
           />
 
           <View style={styles.bottomCard}>
@@ -116,9 +246,18 @@ export default function DashboardScreen({
     if (activeDashboard === 'soil') {
       return (
         <>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Dashboard Kelembapan Tanah</Text>
+            <Text style={styles.infoText}>
+              Menampilkan kondisi kelembapan tanah berdasarkan sensor moisture.
+            </Text>
+          </View>
+
+          {renderRealtimeInfo()}
+
           <GaugeCard
             title="Kelembapan Tanah"
-            value={sensorData.soilMoisture}
+            value={latestSensorData.soilMoisture}
             unit="%"
             min={0}
             max={100}
@@ -127,16 +266,18 @@ export default function DashboardScreen({
 
           <SensorChartCard
             title="Grafik Kelembapan Tanah"
-            description=""
-            labels={sensorHistory.labels}
+            labels={chartLabels}
             datasets={[
               {
-                data: sensorHistory.soilMoisture,
+                data: soilMoistureData,
                 color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
                 strokeWidth: 3,
               },
             ]}
             suffix="%"
+            downloadRangeLabel={getDownloadRangeLabel()}
+            onOpenDownloadRange={openDownloadRangeModal}
+            onDownloadCsv={handleDownloadCsv}
           />
 
           <View style={styles.bottomCard}>
@@ -152,9 +293,18 @@ export default function DashboardScreen({
     if (activeDashboard === 'tds') {
       return (
         <>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Dashboard TDS</Text>
+            <Text style={styles.infoText}>
+              Menampilkan kadar larutan atau nutrisi air berdasarkan sensor TDS.
+            </Text>
+          </View>
+
+          {renderRealtimeInfo()}
+
           <GaugeCard
             title="Kadar Air / TDS"
-            value={sensorData.tds}
+            value={latestSensorData.tds}
             unit="ppm"
             min={0}
             max={1500}
@@ -163,16 +313,18 @@ export default function DashboardScreen({
 
           <SensorChartCard
             title="Grafik TDS"
-            description=""
-            labels={sensorHistory.labels}
+            labels={chartLabels}
             datasets={[
               {
-                data: sensorHistory.tds,
+                data: tdsData,
                 color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
                 strokeWidth: 3,
               },
             ]}
             suffix="ppm"
+            downloadRangeLabel={getDownloadRangeLabel()}
+            onOpenDownloadRange={openDownloadRangeModal}
+            onDownloadCsv={handleDownloadCsv}
           />
 
           <View style={styles.bottomCard}>
@@ -190,13 +342,16 @@ export default function DashboardScreen({
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>Dashboard Sensor</Text>
           <Text style={styles.infoText}>
-            Monitoring suhu, kelembapan tanah, dan kadar larutan.
+            Monitoring suhu, kelembapan tanah, dan kadar larutan menggunakan
+            sensor TDS.
           </Text>
         </View>
 
+        {renderRealtimeInfo()}
+
         <GaugeCard
           title="Suhu"
-          value={sensorData.temperature}
+          value={latestSensorData.temperature}
           unit="°C"
           min={0}
           max={50}
@@ -205,7 +360,7 @@ export default function DashboardScreen({
 
         <GaugeCard
           title="Kelembapan Tanah"
-          value={sensorData.soilMoisture}
+          value={latestSensorData.soilMoisture}
           unit="%"
           min={0}
           max={100}
@@ -214,48 +369,57 @@ export default function DashboardScreen({
 
         <GaugeCard
           title="Kadar Air / TDS"
-          value={sensorData.tds}
+          value={latestSensorData.tds}
           unit="ppm"
           min={0}
           max={1500}
           status="Kadar larutan stabil"
         />
 
-  <SensorChartCard
-  title="Grafik Sensor"
-  description=""
-  labels={sensorHistory.labels}
-  datasets={[
-    {
-      data: sensorHistory.temperature,
-      color: (opacity = 1) => `rgba(22, 163, 74, ${opacity})`,
-      strokeWidth: 3,
-    },
-    {
-      data: sensorHistory.soilMoisture,
-      color: (opacity = 1) => `rgba(14, 165, 233, ${opacity})`,
-      strokeWidth: 3,
-    },
-  ]}
-/>
+        <SensorChartCard
+          title="Grafik Gabungan Sensor"
+          labels={chartLabels}
+          datasets={[
+            {
+              data: temperatureData,
+              color: (opacity = 1) => `rgba(22, 163, 74, ${opacity})`,
+              strokeWidth: 3,
+            },
+            {
+              data: soilMoistureData,
+              color: (opacity = 1) => `rgba(14, 165, 233, ${opacity})`,
+              strokeWidth: 3,
+            },
+          ]}
+          downloadRangeLabel={getDownloadRangeLabel()}
+          onOpenDownloadRange={openDownloadRangeModal}
+          onDownloadCsv={handleDownloadCsv}
+        />
 
-<View style={styles.legendCard}>
-  <Text style={styles.legendTitle}>Keterangan Grafik</Text>
+        <View style={styles.legendCard}>
+          <Text style={styles.legendTitle}>Keterangan Grafik</Text>
 
-  <View style={styles.legendRow}>
-    <View style={[styles.legendDot, styles.temperatureDot]} />
-    <Text style={styles.legendText}>
-      Suhu °C
-    </Text>
-  </View>
+          <View style={styles.legendRow}>
+            <View style={[styles.legendDot, styles.temperatureDot]} />
+            <Text style={styles.legendText}>
+              Garis hijau menunjukkan data suhu dalam satuan °C.
+            </Text>
+          </View>
 
-  <View style={styles.legendRow}>
-    <View style={[styles.legendDot, styles.soilDot]} />
-    <Text style={styles.legendText}>
-      Kelembapan %
-    </Text>
-  </View>
-</View>
+          <View style={styles.legendRow}>
+            <View style={[styles.legendDot, styles.soilDot]} />
+            <Text style={styles.legendText}>
+              Garis biru menunjukkan data kelembapan tanah dalam satuan %.
+            </Text>
+          </View>
+
+          <View style={styles.legendNoteBox}>
+            <Text style={styles.legendNoteText}>
+              Data TDS tidak ditampilkan pada grafik gabungan karena memiliki
+              skala nilai lebih besar. Grafik TDS tersedia pada Dashboard TDS.
+            </Text>
+          </View>
+        </View>
 
         <View style={styles.bottomCard}>
           <Text style={styles.bottomTitle}>Status Sistem</Text>
@@ -263,7 +427,8 @@ export default function DashboardScreen({
             Semua sensor aktif dan siap mengirim data.
           </Text>
           <Text style={styles.bottomSubText}>
-            Data saat ini masih menggunakan mock data. Nanti bagian ini dapat disambungkan ke Axios atau Firebase.
+            Data saat ini masih menggunakan mock data real-time. Nanti bagian
+            ini dapat disambungkan ke Axios atau Firebase.
           </Text>
         </View>
       </>
@@ -272,6 +437,118 @@ export default function DashboardScreen({
 
   return (
     <SafeAreaView style={styles.container}>
+      <Modal
+        visible={showDownloadRangeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDownloadRangeModal(false)}
+      >
+        <View style={styles.rangeModalOverlay}>
+          <Pressable
+            style={styles.rangeModalCloseArea}
+            onPress={() => setShowDownloadRangeModal(false)}
+          />
+
+          <View style={styles.rangeModalCard}>
+            <Text style={styles.rangeModalTitle}>Pilih Data Log</Text>
+
+            <Pressable
+              style={[
+                styles.rangeModalItem,
+                downloadFilter === '1h' && styles.activeRangeModalItem,
+              ]}
+              onPress={() => handleSelectDownloadRange('1h')}
+            >
+              <Text
+                style={[
+                  styles.rangeModalText,
+                  downloadFilter === '1h' && styles.activeRangeModalText,
+                ]}
+              >
+                1 Jam Terakhir
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.rangeModalItem,
+                downloadFilter === '1d' && styles.activeRangeModalItem,
+              ]}
+              onPress={() => handleSelectDownloadRange('1d')}
+            >
+              <Text
+                style={[
+                  styles.rangeModalText,
+                  downloadFilter === '1d' && styles.activeRangeModalText,
+                ]}
+              >
+                1 Hari Terakhir
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.rangeModalItem,
+                downloadFilter === '1w' && styles.activeRangeModalItem,
+              ]}
+              onPress={() => handleSelectDownloadRange('1w')}
+            >
+              <Text
+                style={[
+                  styles.rangeModalText,
+                  downloadFilter === '1w' && styles.activeRangeModalText,
+                ]}
+              >
+                1 Minggu Terakhir
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.rangeModalItem,
+                downloadFilter === '1m' && styles.activeRangeModalItem,
+              ]}
+              onPress={() => handleSelectDownloadRange('1m')}
+            >
+              <Text
+                style={[
+                  styles.rangeModalText,
+                  downloadFilter === '1m' && styles.activeRangeModalText,
+                ]}
+              >
+                1 Bulan Terakhir
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.rangeModalItem,
+                downloadFilter === 'custom' && styles.activeRangeModalItem,
+              ]}
+              onPress={() => handleSelectDownloadRange('custom')}
+            >
+              <Text
+                style={[
+                  styles.rangeModalText,
+                  downloadFilter === 'custom' && styles.activeRangeModalText,
+                ]}
+              >
+                Pilih Tanggal Sendiri
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {showDownloadDatePicker && (
+        <DateTimePicker
+          value={downloadCustomDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={handleChangeDownloadDate}
+        />
+      )}
+
       <Modal
         visible={isMenuOpen}
         transparent
@@ -476,64 +753,87 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-legendCard: {
-  backgroundColor: '#FFFFFF',
-  borderRadius: 22,
-  padding: 18,
-  marginBottom: 18,
-},
+  realTimeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
 
-legendTitle: {
-  fontSize: 17,
-  fontWeight: '900',
-  color: '#064E3B',
-  marginBottom: 14,
-},
+  realTimeDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    marginRight: 10,
+  },
 
-legendRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginBottom: 12,
-},
+  realTimeText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065F46',
+    lineHeight: 19,
+  },
 
-legendDot: {
-  width: 14,
-  height: 14,
-  borderRadius: 7,
-  marginRight: 10,
-},
+  legendCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 18,
+  },
 
-temperatureDot: {
-  backgroundColor: '#16A34A',
-},
+  legendTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#064E3B',
+    marginBottom: 14,
+  },
 
-soilDot: {
-  backgroundColor: '#0EA5E9',
-},
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
 
-tdsDot: {
-  backgroundColor: '#EAB308',
-},
+  legendDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginRight: 10,
+  },
 
-legendText: {
-  flex: 1,
-  fontSize: 13,
-  color: '#047857',
-  lineHeight: 20,
-},
+  temperatureDot: {
+    backgroundColor: '#16A34A',
+  },
 
-legendNoteBox: {
-  backgroundColor: '#ECFDF5',
-  borderRadius: 14,
-  padding: 12,
-  marginTop: 4,
-},
+  soilDot: {
+    backgroundColor: '#0EA5E9',
+  },
 
-legendNoteText: {
-  fontSize: 12,
-  color: '#065F46',
-  lineHeight: 18,
-},
+  legendText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#047857',
+    lineHeight: 20,
+  },
+
+  legendNoteBox: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 4,
+  },
+
+  legendNoteText: {
+    fontSize: 12,
+    color: '#065F46',
+    lineHeight: 18,
+  },
 
   bottomCard: {
     backgroundColor: '#FFFFFF',
@@ -561,6 +861,56 @@ legendNoteText: {
     fontSize: 13,
     color: '#64748B',
     lineHeight: 19,
+  },
+
+  rangeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+
+  rangeModalCloseArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+
+  rangeModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+  },
+
+  rangeModalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#064E3B',
+    marginBottom: 14,
+  },
+
+  rangeModalItem: {
+    paddingVertical: 15,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    borderRadius: 12,
+  },
+
+  activeRangeModalItem: {
+    backgroundColor: '#ECFDF5',
+  },
+
+  rangeModalText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+
+  activeRangeModalText: {
+    color: '#059669',
   },
 
   modalOverlay: {
