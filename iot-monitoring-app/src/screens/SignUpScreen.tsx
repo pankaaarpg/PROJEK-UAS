@@ -12,26 +12,46 @@ import {
   View,
 } from 'react-native';
 
-type LoginScreenProps = {
-  onLogin: (name: string) => void;
-  onGoToSignUp: () => void;
+type SignUpScreenProps = {
+  onGoToLogin: () => void;
 };
 
-export default function LoginScreen({
-  onLogin,
-  onGoToSignUp,
-}: LoginScreenProps) {
+export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
   const [name, setName] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
-  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
 
-  const handleLogin = () => {
-    if (!name.trim() || !password.trim()) {
-      Alert.alert('Login Gagal', 'Nama dan password wajib diisi.');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState<boolean>(false);
+
+  const handleSignUp = () => {
+    if (
+      !name.trim() ||
+      !email.trim() ||
+      !password.trim() ||
+      !confirmPassword.trim()
+    ) {
+      Alert.alert('Sign Up Gagal', 'Semua data wajib diisi.');
       return;
     }
 
-    onLogin(name);
+    if (password !== confirmPassword) {
+      Alert.alert('Sign Up Gagal', 'Password dan konfirmasi password tidak sama.');
+      return;
+    }
+
+    Alert.alert(
+      'Sign Up Berhasil',
+      'Akun berhasil dibuat. Silakan login.',
+      [
+        {
+          text: 'OK',
+          onPress: onGoToLogin,
+        },
+      ]
+    );
   };
 
   return (
@@ -45,21 +65,33 @@ export default function LoginScreen({
             <Text style={styles.logoText}>IoT</Text>
           </View>
 
-          <Text style={styles.title}>Selamat Datang</Text>
+          <Text style={styles.title}>Buat Akun</Text>
 
           <Text style={styles.subtitle}>
-            Masuk untuk memantau data perangkat IoT secara mudah dan real-time.
+            Daftar untuk mulai menggunakan aplikasi monitoring perangkat IoT.
           </Text>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nama</Text>
-
             <TextInput
               style={styles.input}
               placeholder="Masukkan nama"
               placeholderTextColor="#86A99A"
               value={name}
               onChangeText={setName}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Masukkan email"
+              placeholderTextColor="#86A99A"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
           </View>
 
@@ -92,13 +124,44 @@ export default function LoginScreen({
             </View>
           </View>
 
-          <Pressable style={styles.button} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Login</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Konfirmasi Password</Text>
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Ulangi password"
+                placeholderTextColor="#86A99A"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+              />
+
+              <Pressable
+                style={styles.eyeButton}
+                onPress={() =>
+                  setShowConfirmPassword(!showConfirmPassword)
+                }
+              >
+                <Image
+                  source={
+                    showConfirmPassword
+                      ? require('../../assets/eye-off.png')
+                      : require('../../assets/eye.png')
+                  }
+                  style={styles.eyeImage}
+                />
+              </Pressable>
+            </View>
+          </View>
+
+          <Pressable style={styles.button} onPress={handleSignUp}>
+            <Text style={styles.buttonText}>Sign Up</Text>
           </Pressable>
 
-          <Pressable style={styles.signUpWrapper} onPress={onGoToSignUp}>
-            <Text style={styles.signUpText}>
-              Belum punya akun? <Text style={styles.signUpLink}>Sign Up</Text>
+          <Pressable style={styles.loginWrapper} onPress={onGoToLogin}>
+            <Text style={styles.loginText}>
+              Sudah punya akun? <Text style={styles.loginLink}>Login</Text>
             </Text>
           </Pressable>
         </View>
@@ -165,11 +228,11 @@ const styles = StyleSheet.create({
     color: '#047857',
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 28,
+    marginBottom: 24,
   },
 
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
 
   label: {
@@ -232,18 +295,18 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  signUpWrapper: {
+  loginWrapper: {
     marginTop: 18,
     alignItems: 'center',
   },
 
-  signUpText: {
+  loginText: {
     fontSize: 13,
     color: '#047857',
     fontWeight: '600',
   },
 
-  signUpLink: {
+  loginLink: {
     color: '#064E3B',
     fontWeight: '900',
   },
