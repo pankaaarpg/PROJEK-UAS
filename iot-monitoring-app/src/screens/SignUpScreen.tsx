@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator, // <-- 1. Tambahkan import ini untuk spinner loading
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -12,6 +13,10 @@ import {
   View,
 } from 'react-native';
 
+import { auth, db } from '../services/firebase/firebaseConfig'; 
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+
 type SignUpScreenProps = {
   onGoToLogin: () => void;
 };
@@ -23,10 +28,11 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState<string>('');
 
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [showConfirmPassword, setShowConfirmPassword] =
-    useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+  
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (
       !name.trim() ||
       !email.trim() ||
@@ -42,16 +48,42 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
       return;
     }
 
-    Alert.alert(
-      'Sign Up Berhasil',
-      'Akun berhasil dibuat. Silakan login.',
-      [
-        {
-          text: 'OK',
-          onPress: onGoToLogin,
-        },
-      ]
-    );
+    setLoading(true); 
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      await setDoc(doc(db, 'users', user.uid), {
+        nama: name,
+        email: email,
+        role: 'user', 
+        createdAt: new Date().toISOString(),
+      });
+
+      Alert.alert(
+        'Sign Up Berhasil',
+        'Akun berhasil dibuat. Silakan login.',
+        [
+          {
+            text: 'OK',
+            onPress: onGoToLogin,
+          },
+        ]
+      );
+    } catch (error: any) {
+      let errorMessage = 'Terjadi kesalahan saat mendaftar.';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Email sudah digunakan oleh akun lain.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Format email tidak valid.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password terlalu lemah (minimal 6 karakter).';
+      }
+      
+      Alert.alert('Pesan dari Firebase', errorMessage);
+    } finally {
+      setLoading(false); 
+    }
   };
 
   return (
@@ -79,6 +111,7 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
               placeholderTextColor="#86A99A"
               value={name}
               onChangeText={setName}
+              editable={!loading} // Matikan input jika sedang loading
             />
           </View>
 
@@ -92,12 +125,12 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={!loading} // Matikan input jika sedang loading
             />
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-
             <View style={styles.passwordContainer}>
               <TextInput
                 style={styles.passwordInput}
@@ -106,11 +139,12 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                editable={!loading}
               />
-
               <Pressable
                 style={styles.eyeButton}
                 onPress={() => setShowPassword(!showPassword)}
+                disabled={loading}
               >
                 <Image
                   source={
@@ -126,7 +160,6 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Konfirmasi Password</Text>
-
             <View style={styles.passwordContainer}>
               <TextInput
                 style={styles.passwordInput}
@@ -135,13 +168,12 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
+                editable={!loading}
               />
-
               <Pressable
                 style={styles.eyeButton}
-                onPress={() =>
-                  setShowConfirmPassword(!showConfirmPassword)
-                }
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                disabled={loading}
               >
                 <Image
                   source={
@@ -155,11 +187,20 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
             </View>
           </View>
 
-          <Pressable style={styles.button} onPress={handleSignUp}>
-            <Text style={styles.buttonText}>Sign Up</Text>
+          {/* 2. UPDATE BAGIAN TOMBOL DI BAWAH INI */}
+          <Pressable 
+            style={[styles.button, loading && { opacity: 0.7 }]} 
+            onPress={handleSignUp}
+            disabled={loading} // Kunci tombol jika true
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.buttonText}>Sign Up</Text>
+            )}
           </Pressable>
 
-          <Pressable style={styles.loginWrapper} onPress={onGoToLogin}>
+          <Pressable style={styles.loginWrapper} onPress={onGoToLogin} disabled={loading}>
             <Text style={styles.loginText}>
               Sudah punya akun? <Text style={styles.loginLink}>Login</Text>
             </Text>
@@ -170,144 +211,25 @@ export default function SignUpScreen({ onGoToLogin }: SignUpScreenProps) {
   );
 }
 
+// Bagian styles di bawah ini tetap sama seperti punya kamu...
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#064E3B',
-  },
-
-  wrapper: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-
-  card: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 28,
-    padding: 26,
-    shadowColor: '#022C22',
-    shadowOpacity: 0.25,
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowRadius: 20,
-    elevation: 8,
-  },
-
-  logoBox: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: '#10B981',
-    alignSelf: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 4,
-    borderColor: '#A7F3D0',
-  },
-
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 26,
-    fontWeight: '900',
-  },
-
-  title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#064E3B',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-
-  subtitle: {
-    fontSize: 14,
-    color: '#047857',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-
-  inputGroup: {
-    marginBottom: 14,
-  },
-
-  label: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#065F46',
-    marginBottom: 8,
-  },
-
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    fontSize: 15,
-    color: '#064E3B',
-  },
-
-  passwordContainer: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    fontSize: 15,
-    color: '#064E3B',
-  },
-
-  eyeButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-
-  eyeImage: {
-    width: 22,
-    height: 22,
-    resizeMode: 'contain',
-  },
-
-  button: {
-    backgroundColor: '#059669',
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-
-  loginWrapper: {
-    marginTop: 18,
-    alignItems: 'center',
-  },
-
-  loginText: {
-    fontSize: 13,
-    color: '#047857',
-    fontWeight: '600',
-  },
-
-  loginLink: {
-    color: '#064E3B',
-    fontWeight: '900',
-  },
+  container: { flex: 1, backgroundColor: '#064E3B' },
+  wrapper: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  card: { backgroundColor: '#ECFDF5', borderRadius: 28, padding: 26, elevation: 8 },
+  logoBox: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#10B981', alignSelf: 'center', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 4, borderColor: '#A7F3D0' },
+  logoText: { color: '#FFFFFF', fontSize: 26, fontWeight: '900' },
+  title: { fontSize: 28, fontWeight: '900', color: '#064E3B', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 14, color: '#047857', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  inputGroup: { marginBottom: 14 },
+  label: { fontSize: 14, fontWeight: '700', color: '#065F46', marginBottom: 8 },
+  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 13, fontSize: 15, color: '#064E3B' },
+  passwordContainer: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 16, flexDirection: 'row', alignItems: 'center' },
+  passwordInput: { flex: 1, paddingHorizontal: 16, paddingVertical: 13, fontSize: 15, color: '#064E3B' },
+  eyeButton: { paddingHorizontal: 14, paddingVertical: 10 },
+  eyeImage: { width: 22, height: 22, resizeMode: 'contain' },
+  button: { backgroundColor: '#059669', borderRadius: 16, paddingVertical: 15, alignItems: 'center', marginTop: 8 },
+  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
+  loginWrapper: { marginTop: 18, alignItems: 'center' },
+  loginText: { fontSize: 13, color: '#047857', fontWeight: '600' },
+  loginLink: { color: '#064E3B', fontWeight: '900' },
 });

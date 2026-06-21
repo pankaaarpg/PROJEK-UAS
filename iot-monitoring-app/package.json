@@ -15,8 +15,9 @@
     "expo-file-system": "~19.0.23",
     "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-native": "0.81.5",
+    "firebase": "^12.15.0",
+    "react": "^19.1.0",
+    "react-native": "^0.81.5",
     "react-native-chart-kit": "^6.12.3",
     "react-native-svg": "15.12.1"
   },
