@@ -266,7 +266,7 @@ export default function DashboardScreen({
         onPress={handleSendNotification}
       >
         <Text style={styles.notificationButtonText}>
-          Kirim Notifikasi Telegram
+          Bagianmu dit
         </Text>
       </Pressable>
     );
