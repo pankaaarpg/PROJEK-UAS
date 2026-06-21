@@ -28,6 +28,9 @@ import {
 } from '../utils/filterSensorLogs';
 import { exportSensorLogsToCsv } from '../services/export/csvExportService';
 
+// === IMPORT SERVICE TELEGRAM ===
+import { sendTelegramNotif } from '../services/axios/apiService';
+
 type DashboardScreenProps = {
   username: string;
   onLogout: () => void;
@@ -103,6 +106,59 @@ export default function DashboardScreen({
   }, []);
 
   const latestSensorData = realTimeLogs[realTimeLogs.length - 1] || defaultSensorLog;
+
+  // =================================================================
+  // LOGIKA PENGAWAS OTOMATIS & TELEGRAM
+  // =================================================================
+  const HAD_SUHU_TINGGI = 30;
+  const HAD_KELEMBAPAN_RENDAH = 30;
+  const HAD_KELEMBAPAN_TINGGI = 80;
+
+  const statusGabunganTerakhir = useRef<string | null>(null);
+
+  useEffect(() => {
+    const evaluasiKondisi = async () => {
+      // Abaikan jika data masih default kosong (mencegah salah deteksi di awal)
+      if (!latestSensorData || latestSensorData.temperature === 0) return;
+
+      const suhu = latestSensorData.temperature;
+      const kelembapan = latestSensorData.soilMoisture;
+      const tds = latestSensorData.tds;
+
+      // Evaluasi Kondisi Bahaya/Aman
+      const isSuhuBahaya = suhu >= HAD_SUHU_TINGGI;
+      const isKelembapanKering = kelembapan < HAD_KELEMBAPAN_RENDAH;
+      const isKelembapanBasah = kelembapan > HAD_KELEMBAPAN_TINGGI;
+
+      const teksSuhu = isSuhuBahaya ? "🔥 PANAS EKSTREM" : "✅ AMAN";
+      const teksKelembapan = isKelembapanKering ? "💧 KERING (Kritis)" : 
+                             isKelembapanBasah ? "🌊 BANJIR (Terlalu Basah)" : "✅ AMAN (Cukup Lembap)";
+
+      // Membuat kode status unik berbasis kondisi terkini
+      const kodeStatus = `${isSuhuBahaya ? 'PANAS' : 'AMAN'}_${
+        isKelembapanKering ? 'KERING' : isKelembapanBasah ? 'BANJIR' : 'AMAN'
+      }`;
+
+      // Kirim otomatis HANYA JIKA status berubah (anti-spam)
+      if (statusGabunganTerakhir.current !== kodeStatus) {
+        statusGabunganTerakhir.current = kodeStatus;
+
+        let judul = "✅ NORMAL: SEMUA SISTEM STABIL";
+        if (isSuhuBahaya || isKelembapanKering || isKelembapanBasah) {
+          judul = (isSuhuBahaya && (isKelembapanKering || isKelembapanBasah)) 
+                  ? "🚨 KRITIS MULTIPEL: SISTEM DALAM BAHAYA!" 
+                  : "⚠️ PERINGATAN: TERDAPAT ANOMALI SENSOR!";
+        }
+
+        const pesan = `<b>${judul}</b>\n\n• Suhu Lingkungan: ${suhu}°C\n  └ Status: ${teksSuhu}\n\n• Kelembapan Tanah: ${kelembapan}%\n  └ Status: ${teksKelembapan}\n\n• Kadar Air (TDS): ${tds} ppm`;
+        
+        await sendTelegramNotif(pesan);
+      }
+    };
+
+    evaluasiKondisi();
+  }, [latestSensorData]);
+  // =================================================================
 
   const chartLabels = realTimeLogs.map((item) => {
     const date = new Date(item.timestamp);
@@ -210,11 +266,20 @@ export default function DashboardScreen({
     setShowDownloadRangeModal(true);
   };
 
-  const handleSendNotification = () => {
-    Alert.alert(
-      'Kirim Notifikasi',
-      'Tombol ini sudah siap. Tim Axios akan menambahkan integrasi Telegram.'
-    );
+  // Pemicu Notifikasi Manual via Tombol
+  const handleSendNotification = async () => {
+    const suhu = latestSensorData.temperature;
+    const kelembapan = latestSensorData.soilMoisture;
+    const tds = latestSensorData.tds;
+
+    const pesan = `📢 <b>LAPORAN MANUAL USER</b>\n\n• Suhu: ${suhu}°C\n• Kelembapan Tanah: ${kelembapan}%\n• Kadar Air (TDS): ${tds} ppm\n\n Dikirim secara manual via aplikasi.`;
+
+    try {
+      await sendTelegramNotif(pesan);
+      Alert.alert('Berhasil', 'Laporan data sensor saat ini telah dikirim ke Telegram.');
+    } catch (error) {
+      Alert.alert('Gagal', 'Gagal terhubung ke Telegram. Periksa log atau token Anda.');
+    }
   };
 
   const renderNotificationButton = () => {
@@ -243,6 +308,9 @@ export default function DashboardScreen({
   };
 
   const renderDashboardContent = () => {
+    const currentTemp = latestSensorData?.temperature ?? 0;
+    const currentMoisture = latestSensorData?.soilMoisture ?? 0;
+
     if (activeDashboard === 'temperature') {
       return (
         <>
@@ -258,11 +326,11 @@ export default function DashboardScreen({
 
           <GaugeCard
             title="Suhu"
-            value={latestSensorData?.temperature ?? 0}
+            value={currentTemp}
             unit="°C"
             min={0}
             max={50}
-            status="Normal"
+            status={currentTemp >= HAD_SUHU_TINGGI ? "PANAS EKSTREM" : "Normal"}
           />
 
           <SensorChartCard
@@ -284,7 +352,9 @@ export default function DashboardScreen({
           <View style={styles.bottomCard}>
             <Text style={styles.bottomTitle}>Keterangan</Text>
             <Text style={styles.bottomText}>
-              Suhu berada dalam kondisi normal untuk pemantauan lingkungan.
+              {currentTemp >= HAD_SUHU_TINGGI 
+                ? "Suhu melewati batas aman! Segera lakukan pengecekan pendingin ruangan / lingkungan." 
+                : "Suhu berada dalam kondisi normal untuk pemantauan lingkungan."}
             </Text>
           </View>
         </>
@@ -306,11 +376,14 @@ export default function DashboardScreen({
 
           <GaugeCard
             title="Kelembapan Tanah"
-            value={latestSensorData?.soilMoisture ?? 0}
+            value={currentMoisture}
             unit="%"
             min={0}
             max={100}
-            status="Tanah cukup lembap"
+            status={
+              currentMoisture < HAD_KELEMBAPAN_RENDAH ? "Tanah Kering (Kritis)" :
+              currentMoisture > HAD_KELEMBAPAN_TINGGI ? "Tanah Terlalu Basah / Banjir" : "Tanah cukup lembap"
+            }
           />
 
           <SensorChartCard
@@ -332,7 +405,9 @@ export default function DashboardScreen({
           <View style={styles.bottomCard}>
             <Text style={styles.bottomTitle}>Keterangan</Text>
             <Text style={styles.bottomText}>
-              Kelembapan tanah masih cukup baik untuk kebutuhan tanaman.
+              {currentMoisture < HAD_KELEMBAPAN_RENDAH ? "Kondisi tanah kritis! Diperlukan penyiraman air sesegera mungkin." :
+               currentMoisture > HAD_KELEMBAPAN_TINGGI ? "Volume air terlalu tinggi. Pastikan sistem drainase berfungsi baik." :
+               "Kelembapan tanah masih cukup baik untuk kebutuhan tanaman."}
             </Text>
           </View>
         </>
@@ -402,20 +477,23 @@ export default function DashboardScreen({
 
         <GaugeCard
           title="Suhu"
-          value={latestSensorData?.temperature ?? 0}
+          value={currentTemp}
           unit="°C"
           min={0}
           max={50}
-          status="Normal"
+          status={currentTemp >= HAD_SUHU_TINGGI ? "PANAS EKSTREM" : "Normal"}
         />
 
         <GaugeCard
           title="Kelembapan Tanah"
-          value={latestSensorData?.soilMoisture ?? 0}
+          value={currentMoisture}
           unit="%"
           min={0}
           max={100}
-          status="Tanah cukup lembap"
+          status={
+            currentMoisture < HAD_KELEMBAPAN_RENDAH ? "Tanah Kering (Kritis)" :
+            currentMoisture > HAD_KELEMBAPAN_TINGGI ? "Tanah Banjir" : "Tanah cukup lembap"
+          }
         />
 
         <GaugeCard
@@ -475,7 +553,9 @@ export default function DashboardScreen({
         <View style={styles.bottomCard}>
           <Text style={styles.bottomTitle}>Status Sistem</Text>
           <Text style={styles.bottomText}>
-            Semua sensor aktif dan siap mengirim data.
+            {(currentTemp >= HAD_SUHU_TINGGI || currentMoisture < HAD_KELEMBAPAN_RENDAH || currentMoisture > HAD_KELEMBAPAN_TINGGI)
+              ? "🚨 Terdeteksi masalah pada salah satu parameter sensor!"
+              : "Semua sensor aktif dan berada pada batas normal aman."}
           </Text>
           <Text style={styles.bottomSubText}>
             Data saat ini tersambung langsung ke Firebase Realtime Database.
