@@ -183,6 +183,31 @@ export default function DashboardScreen({
     setShowDownloadRangeModal(true);
   };
 
+  const handleSendNotification = () => {
+    Alert.alert(
+      'Kirim Notifikasi',
+      'Tombol ini sudah siap. Tim Axios akan menambahkan integrasi Telegram.'
+    );
+
+    // TODO TIM AXIOS:
+    // Tambahkan logic pengiriman notifikasi Telegram di sini.
+    // Contoh nanti:
+    // sendTelegramNotification();
+  };
+
+  const renderNotificationButton = () => {
+    return (
+      <Pressable
+        style={styles.notificationButton}
+        onPress={handleSendNotification}
+      >
+        <Text style={styles.notificationButtonText}>
+          Kirim Notifikasi Telegram
+        </Text>
+      </Pressable>
+    );
+  };
+
   const renderRealtimeInfo = () => {
     return (
       <View style={styles.realTimeCard}>
@@ -207,6 +232,8 @@ export default function DashboardScreen({
           </View>
 
           {renderRealtimeInfo()}
+
+          {renderNotificationButton()}
 
           <GaugeCard
             title="Suhu"
@@ -255,6 +282,8 @@ export default function DashboardScreen({
 
           {renderRealtimeInfo()}
 
+          {renderNotificationButton()}
+
           <GaugeCard
             title="Kelembapan Tanah"
             value={latestSensorData.soilMoisture}
@@ -302,6 +331,8 @@ export default function DashboardScreen({
 
           {renderRealtimeInfo()}
 
+          {renderNotificationButton()}
+
           <GaugeCard
             title="Kadar Air / TDS"
             value={latestSensorData.tds}
@@ -348,6 +379,8 @@ export default function DashboardScreen({
         </View>
 
         {renderRealtimeInfo()}
+
+        {renderNotificationButton()}
 
         <GaugeCard
           title="Suhu"
@@ -778,6 +811,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#065F46',
     lineHeight: 19,
+  },
+
+  notificationButton: {
+    backgroundColor: '#059669',
+    borderRadius: 18,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  notificationButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
   },
 
   legendCard: {
