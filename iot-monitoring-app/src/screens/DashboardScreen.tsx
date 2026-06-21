@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react'; // <-- 1. Tambahkan useEffect
 import {
   Alert,
   Animated,
@@ -14,6 +14,9 @@ import {
 import DateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
+
+// === 2. TAMBAHKAN IMPORT MQTT ===
+import mqtt from 'mqtt';
 
 import GaugeCard from '../components/GaugeCard';
 import SensorChartCard from '../components/SensorChartCard';
@@ -63,7 +66,73 @@ export default function DashboardScreen({
     tds: 0,
   };
 
-  const realTimeLogs = sensorLogs.length > 0 ? sensorLogs : [defaultSensorLog];
+  // === 3. UBAH REALTIMELOGS MENJADI STATE DYNAMIC ===
+  const [realTimeLogs, setRealTimeLogs] = useState<any[]>(
+    sensorLogs.length > 0 ? sensorLogs : [defaultSensorLog]
+  );
+
+  // === 4. INTEGRASI MQTT VIA USEEFFECT ===
+  useEffect(() => {
+    // HiveMQ Cloud WSS endpoint menggunakan port 8884
+    const brokerUrl = 'wss://ec2d85ef833d410c90ca2a2984d05f2b.s1.eu.hivemq.cloud:8884/mqtt';
+    
+    const options = {
+      username: 'kinan123',
+      password: 'Kinan123',
+      clientId: 'RN-Kinan-' + Math.random().toString(16).substring(2, 10),
+    };
+
+    console.log('Menghubungkan ke HiveMQ Cloud...');
+    const client = mqtt.connect(brokerUrl, options);
+
+    client.on('connect', () => {
+      console.log('React Native Terhubung ke HiveMQ Cloud!');
+      client.subscribe('ppns/kinan/random', (err) => {
+        if (!err) {
+          console.log('Berhasil Subscribe ke topik: ppns/kinan/random');
+        }
+      });
+    });
+
+    client.on('message', (topic, message) => {
+      if (topic === 'ppns/kinan/random') {
+        try {
+          const payload = JSON.parse(message.toString());
+          
+          // Mapping data dari Arduino JSON ke format objek Dashboard
+          const newLog = {
+            timestamp: new Date().toISOString(),
+            temperature: Number(payload.data1),    // data1 -> Suhu
+            soilMoisture: Number(payload.data2),   // data2 -> Kelembapan Tanah
+            tds: Number(payload.data3),            // data3 -> TDS
+          };
+
+          setRealTimeLogs((prevLogs) => {
+            const updatedLogs = [...prevLogs, newLog];
+            // Membatasi simpanan array (misal maks 20 data terakhir) agar grafik tidak lag/terlalu padat
+            if (updatedLogs.length > 20) {
+              updatedLogs.shift();
+            }
+            return updatedLogs;
+          });
+        } catch (error) {
+          console.error('Gagal parsing JSON MQTT:', error);
+        }
+      }
+    });
+
+    client.on('error', (err) => {
+      console.error('MQTT Connection Error: ', err);
+    });
+
+    // Cleanup koneksi saat screen di-unmount / user logout
+    return () => {
+      if (client) {
+        client.end();
+        console.log('Koneksi MQTT diputus.');
+      }
+    };
+  }, []);
 
   const latestSensorData = realTimeLogs[realTimeLogs.length - 1];
 
@@ -188,11 +257,6 @@ export default function DashboardScreen({
       'Kirim Notifikasi',
       'Tombol ini sudah siap. Tim Axios akan menambahkan integrasi Telegram.'
     );
-
-    // TODO TIM AXIOS:
-    // Tambahkan logic pengiriman notifikasi Telegram di sini.
-    // Contoh nanti:
-    // sendTelegramNotification();
   };
 
   const renderNotificationButton = () => {
@@ -460,8 +524,7 @@ export default function DashboardScreen({
             Semua sensor aktif dan siap mengirim data.
           </Text>
           <Text style={styles.bottomSubText}>
-            Data saat ini masih menggunakan mock data real-time. Nanti bagian
-            ini dapat disambungkan ke Axios atau Firebase.
+            Data saat ini tersambung ke broker HiveMQ via WebSockets Protocol.
           </Text>
         </View>
       </>
@@ -710,346 +773,58 @@ export default function DashboardScreen({
   );
 }
 
+// Bagian stylesheet sama sekali tidak ada perubahan demi menjaga bentuk UI
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ECFDF5',
-  },
-
-  wrapper: {
-    padding: 20,
-    paddingBottom: 36,
-  },
-
-  header: {
-    backgroundColor: '#064E3B',
-    borderRadius: 28,
-    padding: 18,
-    marginBottom: 20,
-  },
-
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  menuButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: '#10B981',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-
-  menuIcon: {
-    fontSize: 28,
-    color: '#FFFFFF',
-    fontWeight: '900',
-    marginTop: -2,
-  },
-
-  headerTextBox: {
-    flex: 1,
-  },
-
-  greeting: {
-    fontSize: 14,
-    color: '#A7F3D0',
-    marginBottom: 4,
-  },
-
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-
-  infoCard: {
-    backgroundColor: '#D1FAE5',
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 18,
-  },
-
-  infoTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#064E3B',
-    marginBottom: 6,
-  },
-
-  infoText: {
-    fontSize: 14,
-    color: '#047857',
-    lineHeight: 20,
-  },
-
-  realTimeCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-
-  realTimeDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#10B981',
-    marginRight: 10,
-  },
-
-  realTimeText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#065F46',
-    lineHeight: 19,
-  },
-
-  notificationButton: {
-    backgroundColor: '#059669',
-    borderRadius: 18,
-    paddingVertical: 15,
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-
-  notificationButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-
-  legendCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 18,
-  },
-
-  legendTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#064E3B',
-    marginBottom: 14,
-  },
-
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-
-  legendDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    marginRight: 10,
-  },
-
-  temperatureDot: {
-    backgroundColor: '#16A34A',
-  },
-
-  soilDot: {
-    backgroundColor: '#0EA5E9',
-  },
-
-  legendText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#047857',
-    lineHeight: 20,
-  },
-
-  legendNoteBox: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 4,
-  },
-
-  legendNoteText: {
-    fontSize: 12,
-    color: '#065F46',
-    lineHeight: 18,
-  },
-
-  bottomCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 18,
-    marginTop: 4,
-  },
-
-  bottomTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#064E3B',
-    marginBottom: 8,
-  },
-
-  bottomText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#059669',
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-
-  bottomSubText: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 19,
-  },
-
-  rangeModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
-
-  rangeModalCloseArea: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-
-  rangeModalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-  },
-
-  rangeModalTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#064E3B',
-    marginBottom: 14,
-  },
-
-  rangeModalItem: {
-    paddingVertical: 15,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    borderRadius: 12,
-  },
-
-  activeRangeModalItem: {
-    backgroundColor: '#ECFDF5',
-  },
-
-  rangeModalText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#065F46',
-  },
-
-  activeRangeModalText: {
-    color: '#059669',
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-  },
-
-  overlayArea: {
-    flex: 1,
-  },
-
-  leftDrawer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: DRAWER_WIDTH,
-    backgroundColor: '#F8FAFC',
-    paddingTop: 20,
-    paddingHorizontal: 24,
-    paddingBottom: 28,
-    borderTopRightRadius: 28,
-    borderBottomRightRadius: 28,
-    zIndex: 10,
-  },
-
-  menuHeader: {
-    alignItems: 'flex-end',
-    paddingTop: 10,
-    paddingBottom: 28,
-  },
-
-  closeIcon: {
-    fontSize: 42,
-    color: '#064E3B',
-    fontWeight: '300',
-  },
-
-  menuContent: {
-    flex: 1,
-  },
-
-  menuSectionTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#064E3B',
-    marginBottom: 12,
-  },
-
-  menuListItem: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingVertical: 18,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  activeMenuListItem: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-
-  menuListText: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#065F46',
-  },
-
-  activeMenuListText: {
-    color: '#059669',
-  },
-
-  chevron: {
-    fontSize: 34,
-    color: '#065F46',
-    fontWeight: '300',
-  },
-
-  logoutFullButton: {
-    backgroundColor: '#DC2626',
-    borderRadius: 10,
-    paddingVertical: 15,
-    marginTop: 'auto',
-  },
-
-  logoutFullText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#ECFDF5' },
+  wrapper: { padding: 20, paddingBottom: 36 },
+  header: { backgroundColor: '#064E3B', borderRadius: 28, padding: 18, marginBottom: 20 },
+  topBar: { flexDirection: 'row', alignItems: 'center' },
+  menuButton: { width: 50, height: 50, borderRadius: 16, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  menuIcon: { fontSize: 28, color: '#FFFFFF', fontWeight: '900', marginTop: -2 },
+  headerTextBox: { flex: 1 },
+  greeting: { fontSize: 14, color: '#A7F3D0', marginBottom: 4 },
+  headerTitle: { fontSize: 24, fontWeight: '900', color: '#FFFFFF' },
+  infoCard: { backgroundColor: '#D1FAE5', borderRadius: 22, padding: 18, marginBottom: 18 },
+  infoTitle: { fontSize: 20, fontWeight: '900', color: '#064E3B', marginBottom: 6 },
+  infoText: { fontSize: 14, color: '#047857', lineHeight: 20 },
+  realTimeCard: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, marginBottom: 18, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#A7F3D0' },
+  realTimeDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#10B981', marginRight: 10 },
+  realTimeText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#065F46', lineHeight: 19 },
+  notificationButton: { backgroundColor: '#059669', borderRadius: 18, paddingVertical: 15, paddingHorizontal: 18, alignItems: 'center', marginBottom: 18 },
+  notificationButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
+  legendCard: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 18, marginBottom: 18 },
+  legendTitle: { fontSize: 17, fontWeight: '900', color: '#064E3B', marginBottom: 14 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  legendDot: { width: 14, height: 14, borderRadius: 7, marginRight: 10 },
+  temperatureDot: { backgroundColor: '#16A34A' },
+  soilDot: { backgroundColor: '#0EA5E9' },
+  legendText: { flex: 1, fontSize: 13, color: '#047857', lineHeight: 20 },
+  legendNoteBox: { backgroundColor: '#ECFDF5', borderRadius: 14, padding: 12, marginTop: 4 },
+  legendNoteText: { fontSize: 12, color: '#065F46', lineHeight: 18 },
+  bottomCard: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 18, marginTop: 4 },
+  bottomTitle: { fontSize: 18, fontWeight: '900', color: '#064E3B', marginBottom: 8 },
+  bottomText: { fontSize: 14, fontWeight: '700', color: '#059669', marginBottom: 8, lineHeight: 20 },
+  bottomSubText: { fontSize: 13, color: '#64748B', lineHeight: 19 },
+  rangeModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.35)', justifyContent: 'center', paddingHorizontal: 28 },
+  rangeModalCloseArea: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  rangeModalCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20 },
+  rangeModalTitle: { fontSize: 20, fontWeight: '900', color: '#064E3B', marginBottom: 14 },
+  rangeModalItem: { paddingVertical: 15, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', borderRadius: 12 },
+  activeRangeModalItem: { backgroundColor: '#ECFDF5' },
+  rangeModalText: { fontSize: 15, fontWeight: '800', color: '#065F46' },
+  activeRangeModalText: { color: '#059669' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.35)' },
+  overlayArea: { flex: 1 },
+  leftDrawer: { position: 'absolute', left: 0, top: 0, bottom: 0, width: DRAWER_WIDTH, backgroundColor: '#F8FAFC', paddingTop: 20, paddingHorizontal: 24, paddingBottom: 28, borderTopRightRadius: 28, borderBottomRightRadius: 28, zIndex: 10 },
+  menuHeader: { alignItems: 'flex-end', paddingTop: 10, paddingBottom: 28 },
+  closeIcon: { fontSize: 42, color: '#064E3B', fontWeight: '300' },
+  menuContent: { flex: 1 },
+  menuSectionTitle: { fontSize: 15, fontWeight: '900', color: '#064E3B', marginBottom: 12 },
+  menuListItem: { borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingVertical: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  activeMenuListItem: { backgroundColor: '#ECFDF5', paddingHorizontal: 12, borderRadius: 8 },
+  menuListText: { fontSize: 15, fontWeight: '900', color: '#065F46' },
+  activeMenuListText: { color: '#059669' },
+  chevron: { fontSize: 34, color: '#065F46', fontWeight: '300' },
+  logoutFullButton: { backgroundColor: '#DC2626', borderRadius: 10, paddingVertical: 15, marginTop: 'auto' },
+  logoutFullText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', textAlign: 'center' },
 });
