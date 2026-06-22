@@ -430,7 +430,7 @@ export default function DashboardScreen({
             title="Kadar Air / TDS"
             value={latestSensorData?.tds ?? 0}
             unit="ppm"
-            min={0}
+            min={0} 
             max={100}
             status="Kadar larutan stabil"
           />

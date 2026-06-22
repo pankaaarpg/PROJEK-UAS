@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react'; // 1. Tambahkan useMemo
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -6,8 +6,8 @@ type GaugeCardProps = {
   title: string;
   value: number;
   unit: string;
-  min: number;
-  max: number;
+  min?: number; // Jadikan opsional
+  max?: number; // Jadikan opsional
   status: string;
 };
 
@@ -15,17 +15,31 @@ export default function GaugeCard({
   title,
   value,
   unit,
-  min,
-  max,
+  min = 0,   // Nilai default 0
+  max = 100, // Nilai default 100
   status,
 }: GaugeCardProps) {
   const size = 150;
   const strokeWidth = 14;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-
-  const percentage = Math.min(Math.max((value - min) / (max - min), 0), 1);
-  const strokeDashoffset = circumference - percentage * circumference;
+  
+  // 2. Gunakan useMemo agar kalkulasi presisi saat value/min/max berubah
+  const { circumference, strokeDashoffset } = useMemo(() => {
+    const radius = (size - strokeWidth) / 2;
+    const circ = 2 * Math.PI * radius;
+    
+    // Pastikan input adalah number, cegah pembagian dengan nol
+    const safeValue = Number(value) || 0;
+    const safeMin = Number(min);
+    const safeMax = Number(max);
+    
+    // Perhitungan persentase yang dikunci 0-1
+    const percentage = Math.min(Math.max((safeValue - safeMin) / (safeMax - safeMin), 0), 1);
+    
+    return {
+      circumference: circ,
+      strokeDashoffset: circ - (percentage * circ),
+    };
+  }, [value, min, max]);
 
   return (
     <View style={styles.card}>
@@ -38,7 +52,7 @@ export default function GaugeCard({
             fill="none"
             cx={size / 2}
             cy={size / 2}
-            r={radius}
+            r={(size - strokeWidth) / 2}
             strokeWidth={strokeWidth}
           />
 
@@ -47,7 +61,7 @@ export default function GaugeCard({
             fill="none"
             cx={size / 2}
             cy={size / 2}
-            r={radius}
+            r={(size - strokeWidth) / 2}
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
