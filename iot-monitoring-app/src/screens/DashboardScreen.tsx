@@ -204,7 +204,7 @@ export default function DashboardScreen({
     if (activeDashboard === 'temperature') return 'Dashboard Suhu';
     if (activeDashboard === 'soil') return 'Dashboard Kelembapan Tanah';
     if (activeDashboard === 'tds') return 'Dashboard TDS';
-    return 'IoT Monitoring';
+    return 'EL - Garden';
   };
 
   const getDownloadRangeLabel = () => {
@@ -300,8 +300,7 @@ export default function DashboardScreen({
       <View style={styles.realTimeCard}>
         <View style={styles.realTimeDot} />
         <Text style={styles.realTimeText}>
-          Mode real-time aktif. Grafik menampilkan data sensor terbaru secara
-          otomatis dari Firebase.
+           
         </Text>
       </View>
     );
@@ -317,7 +316,7 @@ export default function DashboardScreen({
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>Dashboard Suhu</Text>
             <Text style={styles.infoText}>
-              Menampilkan pemantauan suhu lingkungan dari sensor IoT.
+              Pemantauan suhu lingkungan.
             </Text>
           </View>
 
@@ -329,7 +328,7 @@ export default function DashboardScreen({
             value={currentTemp}
             unit="°C"
             min={0}
-            max={50}
+            max={100}
             status={currentTemp >= HAD_SUHU_TINGGI ? "PANAS EKSTREM" : "Normal"}
           />
 
@@ -367,7 +366,7 @@ export default function DashboardScreen({
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>Dashboard Kelembapan Tanah</Text>
             <Text style={styles.infoText}>
-              Menampilkan kondisi kelembapan tanah berdasarkan sensor moisture.
+              Kondisi kelembapan tanah.
             </Text>
           </View>
 
@@ -420,7 +419,7 @@ export default function DashboardScreen({
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>Dashboard TDS</Text>
             <Text style={styles.infoText}>
-              Menampilkan kadar larutan atau nutrisi air berdasarkan sensor TDS.
+              Kadar larutan atau nutrisi air.
             </Text>
           </View>
 
@@ -432,7 +431,7 @@ export default function DashboardScreen({
             value={latestSensorData?.tds ?? 0}
             unit="ppm"
             min={0}
-            max={1500}
+            max={100}
             status="Kadar larutan stabil"
           />
 
@@ -467,8 +466,7 @@ export default function DashboardScreen({
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>Dashboard Sensor</Text>
           <Text style={styles.infoText}>
-            Monitoring suhu, kelembapan tanah, dan kadar larutan menggunakan
-            sensor TDS.
+            Monitoring suhu, kelembapan tanah, dan kadar larutan.
           </Text>
         </View>
 
@@ -558,7 +556,7 @@ export default function DashboardScreen({
               : "Semua sensor aktif dan berada pada batas normal aman."}
           </Text>
           <Text style={styles.bottomSubText}>
-            Data saat ini tersambung langsung ke Firebase Realtime Database.
+            
           </Text>
         </View>
       </>
