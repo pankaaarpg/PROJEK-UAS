@@ -39,3 +39,15 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# File spesifik
+AGENTS.md
+Claude.md
+tsconfig.json
+package.json
+package-lock.json
+
+# Folder
+.claude/
+.expo/
+node_modules/
