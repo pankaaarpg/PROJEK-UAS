@@ -478,7 +478,7 @@ export default function DashboardScreen({
           value={currentTemp}
           unit="°C"
           min={0}
-          max={50}
+          max={100}
           status={currentTemp >= HAD_SUHU_TINGGI ? "PANAS EKSTREM" : "Normal"}
         />
 
@@ -499,7 +499,7 @@ export default function DashboardScreen({
           value={latestSensorData?.tds ?? 0}
           unit="ppm"
           min={0}
-          max={1500}
+          max={100}
           status="Kadar larutan stabil"
         />
 
@@ -1097,3 +1097,14 @@ const styles = StyleSheet.create({
     textAlign: 'center' 
   },
 });
+
+
+
+
+
+
+
+
+
+
+
